@@ -22,8 +22,7 @@ services:
         labels:
             - "docker.group=monitor"
     telegraf:
-        #image: telegraf:latest
-        image: telegraf:libc
+        image: telegraf:latest
         hostname: telegraf
         user: "telegraf:999"
         volumes:
