@@ -1,0 +1,91 @@
+version: "3.8"
+services:
+    grafana:
+        image: grafana/grafana-oss:latest
+        hostname: grafana
+        ports:
+            - 3000:3000
+        environment:
+            - PUID=${PUID}
+            - PGID=${PGID}
+            - TZ=${TZ}
+        volumes:
+            - ${GRAFANA_LOC}/log:/var/log/grafana
+            - ${GRAFANA_LOC}/data:/var/lib/grafana
+            - ${GRAFANA_LOC}/plugins:/var/lib/grafana/plugins
+            - ${GRAFANA_ETC}:/etc/grafana
+        restart: unless-stopped
+        depends_on:
+            - telegraf
+            - influxdb
+            - prometheus
+        labels:
+            - "docker.group=monitor"
+    telegraf:
+        #image: telegraf:latest
+        image: telegraf:libc
+        hostname: telegraf
+        user: "telegraf:999"
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock
+            - /docker/monitoring/telegraf:/etc/telegraf
+        deploy:
+            mode: global
+        restart: unless-stopped
+        runtime: nvidia
+        environment:
+            - NVIDIA_VISIBLE_DEVICES=all
+        labels:
+            - "docker.group=monitor"
+    influxdb:
+        image: influxdb:latest
+        hostname: influxdb
+        ports:
+            - 8087:8086
+        volumes:
+            - /docker/monitoring/influxdb2:/var/lib/influxdb2
+            - /docker/monitoring/influxdb2/_data:/etc/influxdb2
+        restart: unless-stopped
+        command:
+            - '--storage-write-timeout=30s'
+        labels:
+            - "docker.group=monitor"
+    node-exporter:
+        image: prom/node-exporter:latest
+        container_name: node-exporter
+        restart: unless-stopped
+        volumes:
+            - /proc:/host/proc:ro
+            - /sys:/host/sys:ro
+            - /:/rootfs:ro
+        command:
+            - '--path.procfs=/host/proc'
+            - '--path.rootfs=/rootfs'
+            - '--path.sysfs=/host/sys'
+            - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+        expose:
+            - 9100
+        labels:
+            - "docker.group=monitor"
+    prometheus:
+        image: prom/prometheus:latest
+        container_name: prometheus
+        restart: unless-stopped
+        user: "65534:65534"
+        volumes:
+            - /docker/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+            - /docker/monitoring/prometheus:/prometheus
+        command:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+            - '--storage.tsdb.path=/prometheus'
+            - '--web.console.libraries=/etc/prometheus/console_libraries'
+            - '--web.console.templates=/etc/prometheus/consoles'
+            - '--web.enable-lifecycle'
+        ports:
+            - "9090:9090"
+        expose:
+            - 9090
+        depends_on:
+            - node-exporter
+        labels:
+            - "docker.group=monitor"
